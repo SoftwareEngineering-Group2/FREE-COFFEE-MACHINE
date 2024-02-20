@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "568018785681",
+    "firebase_url": "https://lab2-3546c-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "lab2-3546c",
+    "storage_bucket": "lab2-3546c.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:568018785681:android:9447b2e0757fd7c5a17630",
+        "android_client_info": {
+          "package_name": "com.example.labbb_2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7I-qfqaX5SxvT4vR9UXkc3_xk0H6x8v4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
