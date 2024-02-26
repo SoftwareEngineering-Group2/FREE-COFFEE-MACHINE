@@ -5,5 +5,6 @@ We use the symple of lab2 and connect the app and script to the same firebase re
 # During the developement:
 ![coffeeMachine_demo](https://github.com/SoftwareEngineering-Group2/FREE-COFFEE-MACHINE/assets/71625128/1991555c-ab2b-47b2-b954-66cf86559ff2)
 2.26Live Update coffee machine，micro oven，curtain
-![image](https://github.com/SoftwareEngineering-Group2/FREE-COFFEE-MACHINE/assets/112009365/c109ed0b-6f6f-48c7-8b67-0ace93196d85)
+![image](https://github.com/SoftwareEngineering-Group2/FREE-COFFEE-MACHINE/assets/112009365/4d0f4235-7dc9-4146-b688-db7073e3d0ed)
+
 
