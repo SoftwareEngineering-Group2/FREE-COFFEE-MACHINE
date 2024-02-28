@@ -1,0 +1,14 @@
+{
+  "coffee_machine": {
+    "status": "off",
+    "type": "Latte"
+  },
+  "curtain": {
+    "status": "opened"
+  },
+  "microoven": {
+    "mode": "defrost",
+    "status": "off",
+    "time": 2
+  }
+}
