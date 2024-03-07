@@ -1,7 +1,5 @@
-import asyncio
 import pygame
 import threading
-import websockets
 import firebase_admin
 from firebase_admin import credentials, db
 import socketio
@@ -38,14 +36,6 @@ GREY = (128, 128, 128)
 BLUE = (0, 0, 255)
 PINK = (255, 192, 203)
 
-device_states = {
-    ##WhiteLed is added just to be able to test API for now.
-    'whiteLed': 'off',
-    'coffee_machine': 'off',
-    'curtain': 'closed',
-    'microoven': 'off'
-}
-
 
 # Initial state of devices
 status = 'off'  # Coffee machine
@@ -76,15 +66,11 @@ def disconnect():
 
 @sio.on('device-state-changed')
 def on_device_state_changed(data):
-    # Handle the incoming data and update device states accordingly
+    # Will print the changes on the device data. You will need to implement the part to update your device states based on the received data
     print(data)
-    if data['type'] in device_states:
-      device_states[data['type']] = data['state']
-      print(f"Updated {data['type']} to {data['state']}")
-    # You will need to implement this part to update your device states based on the received data
+
 
 def start_socketio_client():
-    """Start the Socket.IO client in a separate thread."""
     sio.connect('https://server-o8if.onrender.com')
     sio.wait()
 
