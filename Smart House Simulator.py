@@ -1,7 +1,10 @@
+import asyncio
 import pygame
 import threading
+import websockets
 import firebase_admin
 from firebase_admin import credentials, db
+import socketio
 
 # Initialize threading lock for time management
 time_lock = threading.Lock()
@@ -12,6 +15,7 @@ cred = credentials.Certificate(
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://lab2-3546c-default-rtdb.europe-west1.firebasedatabase.app/'
 })
+
 
 # Define references to Firebase database for different devices
 coffee_machine_ref = db.reference('coffee_machine')
@@ -34,6 +38,14 @@ GREY = (128, 128, 128)
 BLUE = (0, 0, 255)
 PINK = (255, 192, 203)
 
+device_states = {
+    ##WhiteLed is added just to be able to test API for now.
+    'whiteLed': 'off',
+    'coffee_machine': 'off',
+    'curtain': 'closed',
+    'microoven': 'off'
+}
+
 
 # Initial state of devices
 status = 'off'  # Coffee machine
@@ -51,6 +63,30 @@ animation_speed = 10
 # Coffee machine animation frame
 coffee_animation_frame = 0
 
+# Initialize Socket.IO client
+sio = socketio.Client()
+
+@sio.event
+def connect():
+    print("Connected to the WebSocket server")
+
+@sio.event
+def disconnect():
+    print("Disconnected from the WebSocket server")
+
+@sio.on('device-state-changed')
+def on_device_state_changed(data):
+    # Handle the incoming data and update device states accordingly
+    print(data)
+    if data['type'] in device_states:
+      device_states[data['type']] = data['state']
+      print(f"Updated {data['type']} to {data['state']}")
+    # You will need to implement this part to update your device states based on the received data
+
+def start_socketio_client():
+    """Start the Socket.IO client in a separate thread."""
+    sio.connect('https://server-o8if.onrender.com')
+    sio.wait()
 
 def fetch_device_status():
     """Fetch the status of each device from Firebase and update global variables."""
@@ -141,6 +177,9 @@ def update_microoven_time():
 
 def main():
     """Main function to run the smart home simulator."""
+    socketio_thread = threading.Thread(target=start_socketio_client, daemon=True)
+    socketio_thread.start()
+    
     threading.Thread(target=fetch_device_status, daemon=True).start()
     last_time_update = pygame.time.get_ticks()
     running = True
