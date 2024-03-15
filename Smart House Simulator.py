@@ -5,7 +5,7 @@ from firebase_admin import credentials, db
 import os
 
 # initialize the sound tracks for playing. save any .mp3 files in the same folder with the Smart House Simulator.py
-project_directory = 
+project_directory = 'xxxxxxx' # please add your own local path where save the python file and sound tracks together
 music_tracks = [
     os.path.join(project_directory, 'track1.mp3'),
     os.path.join(project_directory, 'track2.mp3'),
@@ -149,7 +149,8 @@ def draw_devices():
         text_rect = time_text.get_rect(
             center=(microoven_pos[0] + 50, microoven_pos[1] + 130))
         screen.blit(time_text, text_rect)
-     # Draw media player
+
+    # Draw media player
     media_player_color = BLUE if media_player_status == 'play' else GREY
     media_player_pos = (50, 50)  # 媒体播放器的位置
     pygame.draw.rect(screen, media_player_color,
@@ -167,6 +168,12 @@ def draw_devices():
     pygame.draw.rect(screen, GREY, (pause_pos[0], pause_pos[1], 50, 50))
     pause_text = font.render('Stop', True, BLACK)
     screen.blit(pause_text, (pause_pos[0] + 15, pause_pos[1] + 10))
+
+    #Skip button:
+    skip_pos = (media_player_pos[0] + 170, media_player_pos[1])  # Position next to other controls
+    pygame.draw.rect(screen, GREY, (skip_pos[0], skip_pos[1], 50, 50))
+    skip_text = font.render('Skip', True, BLACK)
+    screen.blit(skip_text, (skip_pos[0] + 12, skip_pos[1] + 10))  
 
 
 def update_microoven_time():
@@ -186,10 +193,10 @@ def control_media_player():
     try:
         if media_player_status == 'play':
             if not pygame.mixer.music.get_busy():
-                music_path = music_tracks[current_track % len(music_tracks)]
+                music_path = os.path.join(project_directory, "%s.mp3" % current_track)
                 print("Trying to load music from:", music_path)  # 调试信息
                 pygame.mixer.music.load(
-                    music_tracks[current_track % len(music_tracks)])
+                    music_path)
                 pygame.mixer.music.play()
         elif media_player_status == 'pause':
             pygame.mixer.music.pause()
@@ -199,7 +206,7 @@ def control_media_player():
             current_track += 1
             if pygame.mixer.music.get_busy():
                 pygame.mixer.music.load(
-                    music_tracks[current_track % len(music_tracks)])
+                   music_path)
                 pygame.mixer.music.play()
             media_player_status = 'play'  # Reset to play after skip
     except Exception as e:
