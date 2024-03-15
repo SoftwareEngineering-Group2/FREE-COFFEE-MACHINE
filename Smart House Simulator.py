@@ -4,7 +4,7 @@ import firebase_admin
 from firebase_admin import credentials, db
 import os
 
-# initialise the sound tracks for playing. save any .mp3 files in the same folder with the Smart House Simulator.py
+# initialize the sound tracks for playing. save any .mp3 files in the same folder with the Smart House Simulator.py
 project_directory = 
 music_tracks = [
     os.path.join(project_directory, 'track1.mp3'),
@@ -18,7 +18,7 @@ time_lock = threading.Lock()
 
 # Initialize Firebase
 cred = credentials.Certificate(
-    'D:/downloads/lab2-3546c-firebase-adminsdk-nemlw-ef23d170c0.json')
+    'lab2-3546c-firebase-adminsdk-nemlw-ef23d170c0.json')
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://lab2-3546c-default-rtdb.europe-west1.firebasedatabase.app/'
 })
