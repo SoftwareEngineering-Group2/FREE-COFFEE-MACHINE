@@ -1,14 +1,19 @@
 {
   "coffee_machine": {
     "status": "off",
-    "type": "Latte"
+    "type": "Americano"
   },
   "curtain": {
-    "status": "opened"
+    "status": "closed"
+  },
+  "media_player": {
+    "current_track": "track1",
+    "status": "play",
+    "volume": ""
   },
   "microoven": {
     "mode": "defrost",
     "status": "off",
-    "time": 2
+    "time": 0
   }
 }
