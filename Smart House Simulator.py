@@ -3,9 +3,10 @@ import threading
 import firebase_admin
 from firebase_admin import credentials, db
 import os
+import socketio
 
 # initialize the sound tracks for playing. save any .mp3 files in the same folder with the Smart House Simulator.py
-project_directory = 'xxxxxxx' # please add your own local path where save the python file and sound tracks together
+project_directory = '/Users/frankyuan/Downloads/FREE-CHOICE-main'
 music_tracks = [
     os.path.join(project_directory, 'track1.mp3'),
     os.path.join(project_directory, 'track2.mp3'),
@@ -64,6 +65,38 @@ animation_speed = 10
 
 # Coffee machine animation frame
 coffee_animation_frame = 0
+
+# Initialize Socket.IO client
+sio = socketio.Client()
+
+@sio.event
+def connect():
+    print("Connected to the WebSocket server")
+
+@sio.event
+def disconnect():
+    print("Disconnected from the WebSocket server")
+
+@sio.on('device-state-changed')
+def on_device_state_changed(data):
+    global status, coffee_type, curtain_status, microoven_status, microoven_mode, microoven_time, media_player_status, current_track
+    # Update device states based on the received 'data'
+    if 'coffee_machine' in data:
+        status = data['coffee_machine'].get('status', 'off')
+        coffee_type = data['coffee_machine'].get('type', '')
+    if 'curtain' in data:
+        curtain_status = data['curtain'].get('status', 'closed')
+    if 'microoven' in data:
+        with time_lock:  # Ensure thread safety for microoven updates
+            new_status = data['microoven'].get('status', 'off')
+            new_time = data['microoven'].get('time', 0)
+            if new_status == 'on' and microoven_status == 'off':
+                microoven_time = new_time 
+            microoven_status = new_status
+            microoven_mode = data['microoven'].get('mode', '') 
+    if 'media_player' in data:
+        media_player_status = data['media_player'].get('status', 'stop')
+        current_track = data['media_player'].get('current_track', 0)
 
 
 def fetch_device_status():
