@@ -11,3 +11,5 @@ We use the symple of lab2 and connect the app and script to the same firebase re
 ![image](https://github.com/SoftwareEngineering-Group2/FREE-COFFEE-MACHINE/assets/112009365/4d0f4235-7dc9-4146-b688-db7073e3d0ed)
 
 
+midterm pre demo:
+[Uploading pre demo of midterm.7z…]()
