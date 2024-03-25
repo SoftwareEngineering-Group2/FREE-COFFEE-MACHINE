@@ -89,7 +89,7 @@ def on_device_state_changed(data):
     for device in data:
         device_name = device['deviceName'].lower()
         if device_name == 'curtain':
-            curtain_status = 'opened' if device['deviceState'] == 'on' else 'closed'
+            curtain_status = 'opened' if device['deviceState'] else 'closed'
             print(f"Curtain status is now {curtain_status}")
 
 
