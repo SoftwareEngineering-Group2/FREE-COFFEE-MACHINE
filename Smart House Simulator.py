@@ -8,6 +8,7 @@ import ast
 import json
 import asyncio
 import websockets
+import time # function of responds timing
 
 
 # initialize the sound tracks for playing. save any .mp3 files in the same folder with the Smart House Simulator.py
@@ -64,7 +65,12 @@ sio = socketio.Client()
 
 @sio.event
 def connect():
+    start_time = time.time()  # Record connection start time
     print("Connected to the WebSocket server")
+
+    end_time = time.time()
+    response_time_ms = int((end_time - start_time) * 1000)
+    print(f"Connection response time: {response_time_ms} ms")
 
 
 @sio.event
