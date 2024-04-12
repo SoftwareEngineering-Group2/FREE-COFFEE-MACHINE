@@ -8,7 +8,7 @@ import ast
 import json
 import asyncio
 import websockets
-import time # function of responds timing
+import time  # function of responds timing
 
 
 # initialize the sound tracks for playing. save any .mp3 files in the same folder with the Smart House Simulator.py
@@ -69,8 +69,8 @@ def connect():
     print("Connected to the WebSocket server")
 
     end_time = time.time()
-    response_time_ms = int((end_time - start_time) * 1000)
-    print(f"Connection response time: {response_time_ms} ms")
+    response_time_ms = int((end_time - start_time) * 1000000)
+    print(f"Connection response time: {response_time_ms} nano seconds")
 
 
 @sio.event
@@ -90,6 +90,7 @@ def disconnect():
 def on_device_state_changed(data):
     print("receiving data：", data)
     global status, coffee_type, media_player_status, current_track, curtain_status
+    start_time = time.time()  # Record start time
     for device in data:
         device_name = device['deviceName'].lower()
         new_state = 'on' if device['deviceState'] else 'off'
@@ -112,6 +113,10 @@ def on_device_state_changed(data):
                 continue
             media_player_status = 'play' if new_state == 'on' else 'stop'
             print(f"Media Player status is now {media_player_status}")
+
+    end_time = time.time()
+    response_time_ms = int((end_time - start_time) * 1000000)
+    print(f"Connection response time: {response_time_ms} nano seconds")
 
 
 @sio.on('all-devices')
