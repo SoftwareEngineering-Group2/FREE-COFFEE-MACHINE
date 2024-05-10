@@ -1,6 +1,6 @@
+from numpy import Infinity
 import pygame
 import threading
-import firebase_admin
 from firebase_admin import credentials, db
 import os
 import socketio
@@ -8,10 +8,17 @@ import ast
 import json
 import asyncio
 import websockets
+from dotenv import load_dotenv
+import requests
+import time  # function of responds timing
 
+
+load_dotenv()  # Ensure this is near the start of your script
+
+API_PASSWORD = os.getenv("API_PASSWORD")  # Retrieve API password
 
 # initialize the sound tracks for playing. save any .mp3 files in the same folder with the Smart House Simulator.py
-project_directory = 'C:\\Users\\Admin\\Desktop\\毕业设计\\simulator'
+project_directory = '/Users/frankyuan/Downloads'
 music_tracks = [
     os.path.join(project_directory, 'track1.mp3'),
     os.path.join(project_directory, 'track2.mp3'),
@@ -55,16 +62,24 @@ curtain_width = 0
 curtain_target_width = 300
 animation_speed = 10
 
+brewing = False  # Brewing status
+brew_start_time = None  # Brewing start time
+
 # Coffee machine animation frame
 coffee_animation_frame = 0
 
 # Initialize Socket.IO client
-sio = socketio.Client()
-
+#sio = socketio.Client()
+sio = socketio.Client(reconnection=True, reconnection_attempts=Infinity, reconnection_delay=1, reconnection_delay_max=5)
 
 @sio.event
 def connect():
+    start_time = time.time()  # Record connection start time
     print("Connected to the WebSocket server")
+
+    end_time = time.time()
+    response_time_ms = int((end_time - start_time) * 1000000)
+    print(f"Connection response time: {response_time_ms} nano seconds")
 
 
 @sio.event
@@ -72,53 +87,143 @@ def disconnect():
     print("Disconnected from the WebSocket server")
 
 
-# @sio.on('device-state-changed')
-# def on_device_state_changed(data):
-#     global curtain_status, curtain_width
-#     for device in data:
-#         device_name = device['deviceName'].lower()
-#         if device_name == 'curtain':
-#             # Here, explicitly check if the state is 'on' or 'off'
-#             curtain_status = 'opened' if device['deviceState'] == 'on' else 'closed'
-#             # Also update the curtain_width based on the status
-#             curtain_width = curtain_target_width if curtain_status == 'opened' else 0
-#             print(f"Curtain status is now {curtain_status}")
+@sio.on('complete-device-information')
+def on_complete_device_information(data):
+    print("Received complete device information:", json.dumps(data, indent=2))
+    global status, coffee_type, curtain_status, microoven_status, microoven_mode, microoven_time, media_player_status, current_track
+    updated = False
+
+    for device in data:
+        device_name = device.get('deviceName', '').lower()
+        device_state = 'on' if device.get('deviceState', False) else 'off'
+
+        if device_name == 'coffeemachine':
+            new_coffee_type = device.get('coffeeType', coffee_type) # coffetype change to newState for updating new coffee type
+            if new_coffee_type != coffee_type:
+                coffee_type = new_coffee_type
+                print(f"Coffee Machine Type Updated: Type - {coffee_type}")
+                updated = True
+
+            if device_state != status:
+                status = device_state
+                print(f"Coffee Machine Status Updated: Status - {status}")
+                updated = True
+
+        elif device_name == 'curtain':
+            new_curtain_status = 'opened' if device_state == 'on' else 'closed'
+            if new_curtain_status != curtain_status:
+                curtain_status = new_curtain_status
+                print(f"Updated Curtain: Status - {curtain_status}")
+                updated = True
+
+        elif device_name == 'microoven':
+            new_microoven_mode = device.get('ovenMode', microoven_mode)
+            new_microoven_time = device.get('ovenTimer', microoven_time)
+            if device_state != microoven_status or new_microoven_mode != microoven_mode or new_microoven_time != microoven_time:
+                microoven_status = device_state
+                microoven_mode = new_microoven_mode
+                microoven_time = new_microoven_time
+                print(
+                    f"Updated Micro Oven: Status - {microoven_status}, Mode - {microoven_mode}, Timer - {microoven_time}s")
+                updated = True
+
+        elif device_name == 'mediaplayer':
+            new_media_player_status = 'play' if device_state == 'on' else 'stop'
+            new_current_track = device.get('currentTrack', current_track)
+            if new_media_player_status != media_player_status or new_current_track != current_track:
+                media_player_status = new_media_player_status
+                current_track = new_current_track
+                print(
+                    f"Updated Media Player: Status - {media_player_status}, Current Track - {current_track}")
+                updated = True
+
+    if updated:
+        print("State updated, redrawing devices.")
+        draw_devices()
+        pygame.display.flip()
+    else:
+        print("No updates detected in the incoming data.")
+
+
 @sio.on('device-state-changed')
 def on_device_state_changed(data):
-    global curtain_status
-    for device in data:
-        device_name = device['deviceName'].lower()
-        if device_name == 'curtain':
-            curtain_status = 'opened' if device['deviceState'] else 'closed'
-            print(f"Curtain status is now {curtain_status}")
+    print("Received device state change data:", data)
+    global status, coffee_type, media_player_status, current_track, curtain_status, microoven_status, microoven_mode, microoven_time, brewing, brew_start_time
+    updated = False  # 标记是否需要更新界面
+    start_time = time.time()  # 开始计时
+
+    try:
+        for device in data:
+            device_name = device.get('deviceName', '').lower()
+            new_state = 'on' if device.get('deviceState', False) else 'off'
+            
+            if device_name == 'curtain':
+                if curtain_status != new_state:
+                    curtain_status = 'opened' if new_state == 'on' else 'closed'
+                    print(f"Updated Curtain: Status - {curtain_status}")
+                    updated = True
+
+            elif device_name == 'coffeemachine':
+                new_coffee_type = device.get('coffeeType', coffee_type)
+                if new_coffee_type != coffee_type or new_state != status:
+                    status = new_state
+                    coffee_type = new_coffee_type
+                    brewing = (status == 'on')
+                    brew_start_time = time.time() if brewing else None
+                    print(
+                        f"Updated Coffee Machine: Status - {status}, Type - {coffee_type}")
+                    updated = True
+
+            elif device_name == 'mediaplayer':
+                new_media_player_status = 'play' if new_state == 'on' else 'stop'
+                new_current_track = device.get('currentTrack', current_track)
+                if new_media_player_status != media_player_status or new_current_track != current_track:
+                    media_player_status = new_media_player_status
+                    current_track = new_current_track
+                    print(
+                        f"Updated Media Player: Status - {media_player_status}, Track - {current_track}")
+                    updated = True
+            elif device_name == 'microoven':
+                new_microoven_mode = device.get('mode', microoven_mode)
+                new_microoven_time = device.get('timer', microoven_time)
+                if new_state != microoven_status or new_microoven_mode != microoven_mode or new_microoven_time != microoven_time:
+                    microoven_status = new_state
+                    microoven_mode = new_microoven_mode
+                    microoven_time = new_microoven_time
+                    print(
+                        f"Updated Micro Oven: Status - {microoven_status}, Mode - {microoven_mode}, Timer - {microoven_time}s")
+                    updated = True
+
+        if updated:
+            draw_devices()
+            pygame.display.flip()
+        else:
+            print("No updates detected in the incoming data.")
+    except Exception as e:
+        print(f"Error processing device state changes: {e}")
+
+    end_time = time.time()  # 结束计时
+    response_time_ms = int((end_time - start_time) * 1000000)
+    print(
+        f"Processing time for device state changes: {response_time_ms} nano seconds")
 
 
-# @sio.on('device-state-changed')
-# def on_device_state_changed(data):
-#     global status, coffee_type, curtain_status, microoven_status, microoven_mode, microoven_time, media_player_status, current_track
-#     # 这里假设data是一个包含设备状态的列表，每个设备状态是一个字典
-#     for device in data:
-#         device_name = device['deviceName'].lower()
-#         device_state = device['deviceState']
+def update_device_state_via_websocket(device_name, new_state):
+    """
+    Send device state update to the server via WebSocket.
+    Arguments:
+    - device_name: The name of the device as string.
+    - new_state: The new state of the device (boolean or any relevant data type).
+    """
+    # 创建包含设备状态信息的字典
+    data = {
+        'deviceName': device_name,
+        'deviceState': new_state
+    }
 
-#         if device_name == 'coffee machine':
-#             status = 'on' if device_state else 'off'
-#             # 假设此处不更新coffee_type，如需更新则添加相应逻辑
-
-#         elif device_name == 'curtain':
-#             curtain_status = 'opened' if device_state else 'closed'
-
-#         elif device_name == 'microoven':
-#             microoven_status = 'on' if device_state else 'off'
-#             # 假设此处不更新microoven_mode和microoven_time，如需更新则添加相应逻辑
-
-#         elif device_name == 'media player':
-#             media_player_status = 'play' if device_state else 'stop'
-#             # 假设此处不更新current_track，如需更新则添加相应逻辑
-
-#         # 可以根据需要为其他设备添加更多的elif块
-
-#     print("Device states updated from 'device-state-changed' event.")
+    # 使用 socket.io 发送数据到服务器
+    sio.emit('update_device_state', data)
+    print(f"Sent update to server: {device_name} state changed to {new_state}")
 
 
 @sio.on('all-devices')
@@ -129,74 +234,6 @@ def on_all_devices(data):
         device_name = device['deviceName'].lower()
         device_state = device['deviceState']
         # update the device state of simulaotr
-
-
-# @sio.on('device-state-changed')
-# def on_device_state_changed(data):
-#     global status, coffee_type, curtain_status, microoven_status, microoven_mode, microoven_time, media_player_status, current_track
-#     # 解析接收到的数据，这里假设`data`是字符串表示的字典的列表
-#     for item_str in data:
-#         try:
-#             # 将字符串转换成字典
-#             item_dict = ast.literal_eval(item_str)
-#             # 通用处理逻辑，根据设备类型进行分支
-#             device_type = item_dict.get('type', '').lower()
-#             device_state = item_dict.get('state', '').lower()
-
-#             if device_type == 'coffee machine':
-#                 status = device_state
-#                 coffee_type = item_dict.get(
-#                     'coffeeType', 'unknown').lower() if device_state == 'on' else ''
-#             elif device_type == 'curtain':
-#                 curtain_status = device_state
-#             elif device_type == 'microoven':
-#                 with time_lock:
-#                     microoven_status = device_state
-#                     if 'time' in item_dict:
-#                         microoven_time = int(item_dict['time'])
-#                     if 'mode' in item_dict:
-#                         microoven_mode = item_dict['mode'].lower()
-#             elif device_type == 'media player':
-#                 media_player_status = device_state
-#                 if 'current_track' in item_dict:
-#                     current_track = int(item_dict['current_track'])
-
-#             print(f"Device {device_type} state updated to {device_state}")
-#         except ValueError as e:
-#             print(f"Error processing the received data: {e}")
-
-
-# def fetch_device_status():
-#     global status, coffee_type, curtain_status, microoven_status, microoven_mode, microoven_time, media_player_status, current_track
-#     while True:
-#         # Fetch and update coffee machine status
-#         coffee_status_snapshot = coffee_machine_ref.get()
-#         if coffee_status_snapshot:
-#             status = coffee_status_snapshot.get('status', 'off')
-#             coffee_type = coffee_status_snapshot.get('type', '')
-
-#         # Fetch and update curtain status
-#         curtain_status_snapshot = curtain_ref.get()
-#         if curtain_status_snapshot:
-#             curtain_status = curtain_status_snapshot.get('status', 'closed')
-
-#         # Fetch and update micro oven status, mode, and time
-#         microoven_snapshot = microoven_ref.get()
-#         if microoven_snapshot:
-#             with time_lock:
-#                 new_status = microoven_snapshot.get('status', 'off')
-#                 new_time = microoven_snapshot.get('time', 0)
-#                 if new_status == 'on' and microoven_status == 'off':
-#                     # 当微波炉状态从off变为on时，初始化microoven_time
-#                     microoven_time = new_time
-#                 microoven_status = new_status
-#                 microoven_mode = microoven_snapshot.get('mode', '')
-
-#         # Fetch and update media player status
-#         media_player_snapshot = media_player_ref.get()
-#         if media_player_snapshot:
-#             media_player_status = media_player_snapshot.get('status', 'stop')
-#             current_track = media_player_snapshot.get('current_track', 0)
 
 
 def draw_devices():
@@ -210,15 +247,21 @@ def draw_devices():
     coffee_machine_pos = (100, 450)
     pygame.draw.rect(screen, coffee_machine_color,
                      (coffee_machine_pos[0], coffee_machine_pos[1], 100, 100))
+
+    # Animate brewing effect if coffee machine is on
     if status == 'on':
         coffee_animation_frame = (coffee_animation_frame + 1) % 60
         if coffee_animation_frame < 30:
             pygame.draw.circle(
                 screen, BROWN, (coffee_machine_pos[0] + 50, coffee_machine_pos[1] + 50), 10)
-    coffee_text = font.render(f'Coffee: {status}, {coffee_type}', True, BLACK)
+
+    # Display coffee type only if the coffee machine is on
+    coffee_text = font.render(
+        f'Coffee: {status}' + (f', {coffee_type}' if status == 'on' else ''), True, BLACK)
     coffee_text_rect = coffee_text.get_rect(
         center=(coffee_machine_pos[0] + 50, coffee_machine_pos[1] - 20))
     screen.blit(coffee_text, coffee_text_rect)
+    #pygame.display.update() # make sure the newest coffee type
 
     # Draw curtain with animation
     curtain_text = font.render('Curtain:', True, BLACK)
@@ -291,62 +334,173 @@ def update_microoven_time():
             print(f"Microoven time updated to: {microoven_time}")
             if microoven_time <= 0:
                 microoven_status = 'off'
+                update_device_state_via_websocket(
+                    'microOven', microoven_status)  # 此行确保状态更新发送到服务器
+                print("Microoven turned off, update sent to server.")
 
 
 def control_media_player():
     global media_player_status, current_track
-    # Example music tracks
     try:
+        # 检查 current_track 是否是合理的索引
+        if isinstance(current_track, str):
+            # 假设字符串形式的 track1, track2 等，可以转换为数字 1, 2
+            # 这里假设 track 名称总是以 "track" 开头，后面紧跟数字
+            if current_track.startswith('track'):
+                track_number = current_track[5:]  # 提取数字部分
+                if track_number.isdigit():
+                    current_track = int(track_number)
+                else:
+                    raise ValueError("Track index is not a valid number.")
+
+        # 判断媒体播放器的状态并执行相应的操作
         if media_player_status == 'play':
             if not pygame.mixer.music.get_busy():
-                music_path = os.path.join(
-                    project_directory, "%s.mp3" % current_track)
-                print("Trying to load music from:", music_path)
-                pygame.mixer.music.load(
-                    music_path)
-                pygame.mixer.music.play()
+                if 1 <= current_track <= len(music_tracks):
+                    music_path = music_tracks[current_track - 1]
+                    pygame.mixer.music.load(music_path)
+                    pygame.mixer.music.play()
+
         elif media_player_status == 'pause':
             pygame.mixer.music.pause()
-        elif media_player_status == 'stop':
+
+        elif media_player_status == 'stop' and pygame.mixer.music.get_busy(): # send update to server, only if playing
             pygame.mixer.music.stop()
+            update_device_state_via_websocket(
+                'mediaPlayer', False)  # 发送状态更新到服务器
+            print("Media player stopped, update sent to server.")
+
         elif media_player_status == 'skip':
             current_track += 1
-            if pygame.mixer.music.get_busy():
-                pygame.mixer.music.load(
-                    music_path)
-                pygame.mixer.music.play()
+            if current_track > len(music_tracks):
+                current_track = 1
+            music_path = music_tracks[current_track - 1]
+            pygame.mixer.music.load(music_path)
+            pygame.mixer.music.play()
             media_player_status = 'play'  # Reset to play after skip
+            print(f"Now playing track {current_track}")
+            update_device_state_via_websocket(
+                'mediaPlayer', True)  # 发送播放状态更新到服务器
+
     except Exception as e:
-        print(f"Error playing music: {e}")
+        print(f"Error controlling media player: {e}")
+        print(
+            f"Current track index (type {type(current_track)}): {current_track}")
+
+
+@sio.on('skip-channel')
+def on_skip(data):
+    print("Skip command received via WebSocket.")
+    global media_player_status, current_track
+    if data == "skip":
+        # 假设跳过逻辑是简单的增加轨道
+        current_track += 1
+        if current_track > len(music_tracks):
+            current_track = 1
+        control_media_player()  # 调用控制媒体播放器的函数，现在可能会直接播放新曲目
+        print(f"Skipping to next track: {current_track}")
+
+
+def send_media_player_update(new_status, track=None):
+    """Send media player status update to the server."""
+    url = f"https://server-o8if.onrender.com/device/mediaplayer/{API_PASSWORD}"
+    data = {'state': new_status}
+    if track is not None:
+        data['track'] = track  # 如果有特定曲目需要更新，添加到数据中
+    response = requests.post(url, json=data)
+    print(f'Response from server for media player update: {response.text}')
+
+
+# def send_media_player_update(new_status, track=None):
+#     # 如果不需要与服务器交互，可以注释或删除以下代码
+#     # url = f"https://server-o8if.onrender.com/device/mediaplayer/{API_PASSWORD}"
+#     # data = {'state': new_status}
+#     # if track is not None:
+#     #     data['track'] = track  # 如果有特定曲目需要更新，添加到数据中
+#     # response = requests.post(url, json=data)
+#     # print(f'Response from server for media player update: {response.text}')
+#     pass
+# 如果server不希望和我们进行交互，只需要注释掉上一个函数，不需要修改调用，这里改成pass就好，即取消以上代码的注释
+
+
+def send_device_update(device_type, type_information, new_state):
+    """
+    Send a command to the device with the new API endpoint using the static route.
+    """
+    if type_information:
+        url = f'https://server-o8if.onrender.com/static/device/{device_type}/{type_information}/{API_PASSWORD}'
+    else:
+        url = f'https://server-o8if.onrender.com/static/device/{device_type}/{API_PASSWORD}'
+    data = {'state': new_state}
+    response = requests.post(url, json=data)
+    print(f'Response from {url}: {response.text}')
 
 
 def main():
-    """Main function to run the smart home simulator."""
+    global brewing, brew_start_time, status, coffee_type
     try:
+        # Connect to the WebSocket server
         sio.connect('https://server-o8if.onrender.com/')
         last_time_update = pygame.time.get_ticks()
         running = True
         while running:
             current_ticks = pygame.time.get_ticks()
+
+            # Process each event
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = pygame.mouse.get_pos()
+                    # Check if the coffee machine button is pressed
+                    if (mx - 100)**2 + (my - 450)**2 < 25**2:
+                        if not brewing:
+                            status = 'on'
+                            brewing = True
+                            coffee_type = 'Espresso'  # Or fetch from the last selection
+                            brew_start_time = time.time()
+                            print(f"Started brewing {coffee_type}")
+                            update_device_state_via_websocket(
+                                'coffeeMachine', status)  # Update server immediately
+                        else:
+                            status = 'off'
+                            brewing = False
+                            coffee_type = 'None'
+                            brew_start_time = None
+                            print("Stopped brewing")
+                            update_device_state_via_websocket(
+                                'coffeeMachine', status)  # Update server immediately
 
             # Update micro oven time every second
             if current_ticks - last_time_update > 1000:
                 update_microoven_time()
                 last_time_update = current_ticks
 
-            # Control the media player based on Firebase updates
+            # Check if brewing is complete
+            if brewing and (time.time() - brew_start_time) >= 10:
+                brewing = False
+                status = 'off'
+                coffee_type = 'None'
+                print("Brewing complete, turning off coffee machine.")
+                # Update server when brewing is complete
+                update_device_state_via_websocket('coffeeMachine', status)
+                draw_devices()  # Update the display to show the coffee machine as 'off'
+
+            # Control the media player based on user interaction or automatic processes
             control_media_player()
 
+            # Redraw devices in the simulator's Pygame window
             draw_devices()
             pygame.display.flip()
+
+            # Maintain a consistent framerate
             clock.tick(60)
+
     except Exception as e:
         print(f"Unexpected error: {e}")
     finally:
         pygame.quit()
+        sio.disconnect()
 
 
 if __name__ == '__main__':
