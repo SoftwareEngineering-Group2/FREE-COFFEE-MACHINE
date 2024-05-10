@@ -98,7 +98,7 @@ def on_complete_device_information(data):
         device_state = 'on' if device.get('deviceState', False) else 'off'
 
         if device_name == 'coffeemachine':
-            new_coffee_type = device.get('coffeeType', coffee_type) # coffetype change to newState for updating new coffee type
+            new_coffee_type = device.get('newState', coffee_type) # coffetype change to newState for updating new coffee type
             if new_coffee_type != coffee_type:
                 coffee_type = new_coffee_type
                 print(f"Coffee Machine Type Updated: Type - {coffee_type}")
@@ -164,7 +164,7 @@ def on_device_state_changed(data):
                     updated = True
 
             elif device_name == 'coffeemachine':
-                new_coffee_type = device.get('coffeeType', coffee_type)
+                new_coffee_type = device.get(status, coffee_type) #"newState" before
                 if new_coffee_type != coffee_type or new_state != status:
                     status = new_state
                     coffee_type = new_coffee_type
@@ -172,6 +172,7 @@ def on_device_state_changed(data):
                     brew_start_time = time.time() if brewing else None
                     print(
                         f"Updated Coffee Machine: Status - {status}, Type - {coffee_type}")
+                    update_device_state_via_websocket('coffeeMachine', status) # update back to server! 
                     updated = True
 
             elif device_name == 'mediaplayer':
@@ -216,14 +217,19 @@ def update_device_state_via_websocket(device_name, new_state):
     - new_state: The new state of the device (boolean or any relevant data type).
     """
     # 创建包含设备状态信息的字典
-    data = {
-        'deviceName': device_name,
-        'deviceState': new_state
-    }
+    if new_state is not None and isinstance(new_state, bool):
+        data = {
+            'deviceName': device_name,
+            'deviceState': new_state
+        }
 
-    # 使用 socket.io 发送数据到服务器
-    sio.emit('update_device_state', data)
-    print(f"Sent update to server: {device_name} state changed to {new_state}")
+        # 使用 socket.io 发送数据到服务器
+        sio.emit('update_device_state', data)
+        sio.emit('update_device_state', {'deviceName': 'coffeeMachine', 'deviceState': status}) # for only coffeemachine
+        print(f"Sent backk update to server: {device_name} state changed to {status}")
+        print(f"Sent update to server: {device_name} state changed to {new_state}")
+    else:
+        print(f"Error: Invalid state value for {device_name}. Must be boolean, got {type(new_state)}")
 
 
 @sio.on('all-devices')
@@ -431,7 +437,7 @@ def send_device_update(device_type, type_information, new_state):
         url = f'https://server-o8if.onrender.com/static/device/{device_type}/{type_information}/{API_PASSWORD}'
     else:
         url = f'https://server-o8if.onrender.com/static/device/{device_type}/{API_PASSWORD}'
-    data = {'state': new_state}
+    data = {'newState': new_state}
     response = requests.post(url, json=data)
     print(f'Response from {url}: {response.text}')
 
@@ -461,7 +467,7 @@ def main():
                             brew_start_time = time.time()
                             print(f"Started brewing {coffee_type}")
                             update_device_state_via_websocket(
-                                'coffeeMachine', status)  # Update server immediately
+                                'coffeeMachine', new_state= False)  # Update server immediately
                         else:
                             status = 'off'
                             brewing = False
@@ -469,7 +475,7 @@ def main():
                             brew_start_time = None
                             print("Stopped brewing")
                             update_device_state_via_websocket(
-                                'coffeeMachine', status)  # Update server immediately
+                                'coffeeMachine', new_state=False)  # Update server immediately
 
             # Update micro oven time every second
             if current_ticks - last_time_update > 1000:
@@ -483,7 +489,8 @@ def main():
                 coffee_type = 'None'
                 print("Brewing complete, turning off coffee machine.")
                 # Update server when brewing is complete
-                update_device_state_via_websocket('coffeeMachine', status)
+                #update_device_state_via_websocket('coffeeMachine', status) # update via websocket
+                send_device_update('coffeeMachine', None, new_state=False) #update with url
                 draw_devices()  # Update the display to show the coffee machine as 'off'
 
             # Control the media player based on user interaction or automatic processes
@@ -499,8 +506,9 @@ def main():
     except Exception as e:
         print(f"Unexpected error: {e}")
     finally:
-        pygame.quit()
+        #pygame.quit()
         sio.disconnect()
+        pygame.quit()
 
 
 if __name__ == '__main__':
