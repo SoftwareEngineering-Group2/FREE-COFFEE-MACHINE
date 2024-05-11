@@ -18,7 +18,7 @@ load_dotenv()  # Ensure this is near the start of your script
 API_PASSWORD = os.getenv("API_PASSWORD")  # Retrieve API password
 
 # initialize the sound tracks for playing. save any .mp3 files in the same folder with the Smart House Simulator.py
-project_directory = '/Users/frankyuan/Downloads'
+project_directory = '/Users/xiaochenqin/Downloads'
 music_tracks = [
     os.path.join(project_directory, 'track1.mp3'),
     os.path.join(project_directory, 'track2.mp3'),
@@ -463,7 +463,7 @@ def main():
                         if not brewing:
                             status = 'on'
                             brewing = True
-                            coffee_type = 'Espresso'  # Or fetch from the last selection
+                            coffee_type = ''  # Or fetch from the last selection
                             brew_start_time = time.time()
                             print(f"Started brewing {coffee_type}")
                             update_device_state_via_websocket(
