@@ -353,15 +353,19 @@ def control_media_player():
                     music_path = music_tracks[current_track - 1]
                     pygame.mixer.music.load(music_path)
                     pygame.mixer.music.play()
+                    print(f"Media player playing: {music_path}")
 
         elif media_player_status == 'pause':
-            pygame.mixer.music.pause()
+            if pygame.mixer.music.get_busy():
+                pygame.mixer.music.pause()
+                print("Media player paused")
 
         elif media_player_status == 'stop':
-            pygame.mixer.music.stop()
-            update_device_state_via_websocket(
-                'mediaPlayer', False)  # 发送状态更新到服务器
-            print("Media player stopped, update sent to server.")
+            if pygame.mixer.music.get_busy():
+                pygame.mixer.music.stop()
+                print("Media player stopped")
+                update_device_state_via_websocket(
+                    'mediaPlayer', False)  # 发送状态更新到服务器
 
         elif media_player_status == 'skip':
             current_track += 1
