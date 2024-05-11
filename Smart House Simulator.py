@@ -98,7 +98,7 @@ def on_complete_device_information(data):
         device_state = 'on' if device.get('deviceState', False) else 'off'
 
         if device_name == 'coffeemachine':
-            new_coffee_type = device.get('newState', coffee_type) # coffetype change to newState for updating new coffee type
+            new_coffee_type = device.get('coffeeType', coffee_type) # previous variables: 'newState'
             if new_coffee_type != coffee_type:
                 coffee_type = new_coffee_type
                 print(f"Coffee Machine Type Updated: Type - {coffee_type}")
@@ -164,8 +164,10 @@ def on_device_state_changed(data):
                     updated = True
 
             elif device_name == 'coffeemachine':
-                new_coffee_type = device.get(status, coffee_type) #"newState" before
+                new_coffee_type = device.get('coffeeType', coffee_type) # previous variables: "newState",  status
+                print(f"Debug: Received coffeeType from server: {new_coffee_type}")
                 if new_coffee_type != coffee_type or new_state != status:
+                    print(f"Debug: Updating Coffee Machine from {coffee_type} to {new_coffee_type} and status from {status} to {new_state}")
                     status = new_state
                     coffee_type = new_coffee_type
                     brewing = (status == 'on')
