@@ -510,8 +510,8 @@ def main():
                 update_microoven_time()
                 last_time_update = current_ticks
             
-            # Check if micro oven cooking is complete
-              #Check micro oven timing is finished
+            
+                #Check micro oven timing is finished
                 if microoven_status == 'on' and microoven_time <= 0:
                     microoven_status = 'off'
                     print("Micro oven timing complete, turning off micro oven. send_device_update worked")
