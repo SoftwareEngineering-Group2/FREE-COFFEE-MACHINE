@@ -387,12 +387,16 @@ def control_media_player():
             print("Media player stopped, update sent to server.")
 
         elif media_player_status == 'skip':
+
+            #on_skip()
+
             current_track += 1
             if current_track > len(music_tracks):
                 current_track = 1
             music_path = music_tracks[current_track - 1]
             pygame.mixer.music.load(music_path)
             pygame.mixer.music.play()
+
             media_player_status = 'play'  # Reset to play after skip
             print(f"Now playing track {current_track}")
             update_device_state_via_websocket(
@@ -409,11 +413,13 @@ def on_skip(data):
     print("Skip command received via WebSocket.")
     global media_player_status, current_track
     if data == "skip":
-        # 假设跳过逻辑是简单的增加轨道
-        current_track += 1
+        #current_track += 1
+        media_player_status = 'skip' # new add for skip functionin control_media_player
         if current_track > len(music_tracks):
             current_track = 1
+        
         control_media_player()  # 调用控制媒体播放器的函数，现在可能会直接播放新曲目
+
         print(f"Skipping to next track: {current_track}")
 
 
