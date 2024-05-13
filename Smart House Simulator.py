@@ -18,7 +18,7 @@ load_dotenv()  # Ensure this is near the start of your script
 API_PASSWORD = os.getenv("API_PASSWORD")  # Retrieve API password
 
 # initialize the sound tracks for playing. save any .mp3 files in the same folder with the Smart House Simulator.py
-project_directory = '' #add your own path that stored the music mp3 files
+project_directory = '/Users/xiaochenqin/Downloads/FREE-CHOICE-main_MBP'
 music_tracks = [
     os.path.join(project_directory, 'track1.mp3'),
     os.path.join(project_directory, 'track2.mp3'),
@@ -48,7 +48,7 @@ PINK = (255, 192, 203)
 
 
 # Initial state of devices
-status = 'off'  # Coffee machine
+status = 'off' 
 coffee_type = ''
 curtain_status = 'closed'
 microoven_status = 'off'  # Micro oven status
@@ -186,6 +186,7 @@ def on_device_state_changed(data):
                     print(
                         f"Updated Media Player: Status - {media_player_status}, Track - {current_track}")
                     updated = True
+
             elif device_name == 'microoven':
                 new_microoven_mode = device.get('mode', microoven_mode)
                 new_microoven_time = device.get('timer', microoven_time)
@@ -195,6 +196,7 @@ def on_device_state_changed(data):
                     microoven_time = new_microoven_time
                     print(
                         f"Updated Micro Oven: Status - {microoven_status}, Mode - {microoven_mode}, Timer - {microoven_time}s")
+                    update_device_state_via_websocket('microOven', status) # update back to server! 
                     updated = True
 
         if updated:
@@ -228,8 +230,9 @@ def update_device_state_via_websocket(device_name, new_state):
         # 使用 socket.io 发送数据到服务器
         sio.emit('update_device_state', data)
         sio.emit('update_device_state', {'deviceName': 'coffeeMachine', 'deviceState': status}) # for only coffeemachine
+        sio.emit('update_device_state', {'deviceName': 'microOven', 'deviceState': status})
         print(f"Sent backk update to server: {device_name} state changed to {status}")
-        print(f"Sent update to server: {device_name} state changed to {new_state}")
+        print(f"Sent update to server: {device_name} state changed to boolean: {new_state} ")
     else:
         print(f"Error: Invalid state value for {device_name}. Must be boolean, got {type(new_state)}")
 
@@ -343,8 +346,13 @@ def update_microoven_time():
             if microoven_time <= 0:
                 microoven_status = 'off'
                 update_device_state_via_websocket(
-                    'microOven', microoven_status)  # 此行确保状态更新发送到服务器
+                    'microOven', new_state=False)  # 此行确保状态更新发送到服务器
+                send_device_update('microOven', None, new_state=False)
                 print("Microoven turned off, update sent to server.")
+
+
+
+
 
 
 def control_media_player():
@@ -440,12 +448,17 @@ def send_device_update(device_type, type_information, new_state):
     else:
         url = f'https://server-o8if.onrender.com/static/device/{device_type}/{API_PASSWORD}'
     data = {'newState': new_state}
-    response = requests.post(url, json=data)
-    print(f'Response from {url}: {response.text}')
+    try:
+        response = requests.post(url, json=data)
+        print(f'Response from {url}: {response.text}')
+    except Exception as e:
+        print(f"Failed to send update to {url}: {str(e)}")
+
 
 
 def main():
-    global brewing, brew_start_time, status, coffee_type
+    #global brewing, brew_start_time, status, coffee_type
+    global brewing, brew_start_time, status, coffee_type, microoven_time, microoven_status
     try:
         # Connect to the WebSocket server
         sio.connect('https://server-o8if.onrender.com/')
@@ -479,10 +492,7 @@ def main():
                             update_device_state_via_websocket(
                                 'coffeeMachine', new_state=False)  # Update server immediately
 
-            # Update micro oven time every second
-            if current_ticks - last_time_update > 1000:
-                update_microoven_time()
-                last_time_update = current_ticks
+
 
             # Check if brewing is complete
             if brewing and (time.time() - brew_start_time) >= 10:
@@ -494,6 +504,19 @@ def main():
                 #update_device_state_via_websocket('coffeeMachine', status) # update via websocket
                 send_device_update('coffeeMachine', None, new_state=False) #update with url
                 draw_devices()  # Update the display to show the coffee machine as 'off'
+
+            # Update micro oven time every second
+            if current_ticks - last_time_update > 1000:
+                update_microoven_time()
+                last_time_update = current_ticks
+            
+            # Check if micro oven cooking is complete
+              #Check micro oven timing is finished
+                if microoven_status == 'on' and microoven_time <= 0:
+                    microoven_status = 'off'
+                    print("Micro oven timing complete, turning off micro oven. send_device_update worked")
+                    send_device_update('microOven', None, new_state=False)  # Update server when timing is complete
+                    draw_devices() 
 
             # Control the media player based on user interaction or automatic processes
             control_media_player()
