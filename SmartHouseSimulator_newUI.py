@@ -92,7 +92,7 @@ def on_complete_device_information(data):
         elif device_name == 'microoven':
             new_microoven_mode = device.get('ovenMode', microoven_mode)
             new_microoven_time = device.get('ovenTimer', microoven_time)
-            if device_state != microoven_status or new_microoven_mode != microoven_mode or new_microoven_time != microoven_time:
+            if device_state != microoven_status:
                 microoven_status = device_state
                 microoven_mode = new_microoven_mode
                 microoven_time = new_microoven_time
