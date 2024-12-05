@@ -18,7 +18,7 @@ load_dotenv()  # Ensure this is near the start of your script
 API_PASSWORD = os.getenv("API_PASSWORD")  # Retrieve API password
 
 # initialize the sound tracks for playing. save any .mp3 files in the same folder with the Smart House Simulator.py
-project_directory = '/Users/frankyuan/Downloads'
+project_directory = ''
 music_tracks = [
     os.path.join(project_directory, 'track1.mp3'),
     os.path.join(project_directory, 'track2.mp3'),
@@ -48,7 +48,7 @@ PINK = (255, 192, 203)
 
 
 # Initial state of devices
-status = 'off'  # Coffee machine
+status = 'off' 
 coffee_type = ''
 curtain_status = 'closed'
 microoven_status = 'off'  # Micro oven status
@@ -98,7 +98,7 @@ def on_complete_device_information(data):
         device_state = 'on' if device.get('deviceState', False) else 'off'
 
         if device_name == 'coffeemachine':
-            new_coffee_type = device.get('coffeeType', coffee_type) # coffetype change to newState for updating new coffee type
+            new_coffee_type = device.get('coffeeType', coffee_type) # previous variables: 'newState'
             if new_coffee_type != coffee_type:
                 coffee_type = new_coffee_type
                 print(f"Coffee Machine Type Updated: Type - {coffee_type}")
@@ -164,14 +164,17 @@ def on_device_state_changed(data):
                     updated = True
 
             elif device_name == 'coffeemachine':
-                new_coffee_type = device.get('coffeeType', coffee_type)
+                new_coffee_type = device.get('coffeeType', coffee_type) # previous variables: "newState",  status
+                print(f"Debug: Received coffeeType from server: {new_coffee_type}")
                 if new_coffee_type != coffee_type or new_state != status:
+                    print(f"Debug: Updating Coffee Machine from {coffee_type} to {new_coffee_type} and status from {status} to {new_state}")
                     status = new_state
                     coffee_type = new_coffee_type
                     brewing = (status == 'on')
                     brew_start_time = time.time() if brewing else None
                     print(
                         f"Updated Coffee Machine: Status - {status}, Type - {coffee_type}")
+                    update_device_state_via_websocket('coffeeMachine', status) # update back to server! 
                     updated = True
 
             elif device_name == 'mediaplayer':
@@ -183,6 +186,7 @@ def on_device_state_changed(data):
                     print(
                         f"Updated Media Player: Status - {media_player_status}, Track - {current_track}")
                     updated = True
+
             elif device_name == 'microoven':
                 new_microoven_mode = device.get('mode', microoven_mode)
                 new_microoven_time = device.get('timer', microoven_time)
@@ -192,6 +196,7 @@ def on_device_state_changed(data):
                     microoven_time = new_microoven_time
                     print(
                         f"Updated Micro Oven: Status - {microoven_status}, Mode - {microoven_mode}, Timer - {microoven_time}s")
+                    update_device_state_via_websocket('microOven', status) # update back to server! 
                     updated = True
 
         if updated:
@@ -216,14 +221,20 @@ def update_device_state_via_websocket(device_name, new_state):
     - new_state: The new state of the device (boolean or any relevant data type).
     """
     # 创建包含设备状态信息的字典
-    data = {
-        'deviceName': device_name,
-        'deviceState': new_state
-    }
+    if new_state is not None and isinstance(new_state, bool):
+        data = {
+            'deviceName': device_name,
+            'deviceState': new_state
+        }
 
-    # 使用 socket.io 发送数据到服务器
-    sio.emit('update_device_state', data)
-    print(f"Sent update to server: {device_name} state changed to {new_state}")
+        # 使用 socket.io 发送数据到服务器
+        sio.emit('update_device_state', data)
+        sio.emit('update_device_state', {'deviceName': 'coffeeMachine', 'deviceState': status}) # for only coffeemachine
+        sio.emit('update_device_state', {'deviceName': 'microOven', 'deviceState': status})
+        print(f"Sent backk update to server: {device_name} state changed to {status}")
+        print(f"Sent update to server: {device_name} state changed to boolean: {new_state} ")
+    else:
+        print(f"Error: Invalid state value for {device_name}. Must be boolean, got {type(new_state)}")
 
 
 @sio.on('all-devices')
@@ -335,8 +346,13 @@ def update_microoven_time():
             if microoven_time <= 0:
                 microoven_status = 'off'
                 update_device_state_via_websocket(
-                    'microOven', microoven_status)  # 此行确保状态更新发送到服务器
+                    'microOven', new_state=False)  # 此行确保状态更新发送到服务器
+                send_device_update('microOven', None, new_state=False)
                 print("Microoven turned off, update sent to server.")
+
+
+
+
 
 
 def control_media_player():
@@ -371,12 +387,16 @@ def control_media_player():
             print("Media player stopped, update sent to server.")
 
         elif media_player_status == 'skip':
+
+            #on_skip()
+
             current_track += 1
             if current_track > len(music_tracks):
                 current_track = 1
             music_path = music_tracks[current_track - 1]
             pygame.mixer.music.load(music_path)
             pygame.mixer.music.play()
+
             media_player_status = 'play'  # Reset to play after skip
             print(f"Now playing track {current_track}")
             update_device_state_via_websocket(
@@ -393,11 +413,13 @@ def on_skip(data):
     print("Skip command received via WebSocket.")
     global media_player_status, current_track
     if data == "skip":
-        # 假设跳过逻辑是简单的增加轨道
-        current_track += 1
+        #current_track += 1
+        media_player_status = 'skip' # new add for skip functionin control_media_player
         if current_track > len(music_tracks):
             current_track = 1
+        
         control_media_player()  # 调用控制媒体播放器的函数，现在可能会直接播放新曲目
+
         print(f"Skipping to next track: {current_track}")
 
 
@@ -431,13 +453,18 @@ def send_device_update(device_type, type_information, new_state):
         url = f'https://server-o8if.onrender.com/static/device/{device_type}/{type_information}/{API_PASSWORD}'
     else:
         url = f'https://server-o8if.onrender.com/static/device/{device_type}/{API_PASSWORD}'
-    data = {'state': new_state}
-    response = requests.post(url, json=data)
-    print(f'Response from {url}: {response.text}')
+    data = {'newState': new_state}
+    try:
+        response = requests.post(url, json=data)
+        print(f'Response from {url}: {response.text}')
+    except Exception as e:
+        print(f"Failed to send update to {url}: {str(e)}")
+
 
 
 def main():
-    global brewing, brew_start_time, status, coffee_type
+    #global brewing, brew_start_time, status, coffee_type
+    global brewing, brew_start_time, status, coffee_type, microoven_time, microoven_status
     try:
         # Connect to the WebSocket server
         sio.connect('https://server-o8if.onrender.com/')
@@ -457,11 +484,11 @@ def main():
                         if not brewing:
                             status = 'on'
                             brewing = True
-                            coffee_type = 'Espresso'  # Or fetch from the last selection
+                            coffee_type = ''  # Or fetch from the last selection
                             brew_start_time = time.time()
                             print(f"Started brewing {coffee_type}")
                             update_device_state_via_websocket(
-                                'coffeeMachine', status)  # Update server immediately
+                                'coffeeMachine', new_state= False)  # Update server immediately
                         else:
                             status = 'off'
                             brewing = False
@@ -469,12 +496,9 @@ def main():
                             brew_start_time = None
                             print("Stopped brewing")
                             update_device_state_via_websocket(
-                                'coffeeMachine', status)  # Update server immediately
+                                'coffeeMachine', new_state=False)  # Update server immediately
 
-            # Update micro oven time every second
-            if current_ticks - last_time_update > 1000:
-                update_microoven_time()
-                last_time_update = current_ticks
+
 
             # Check if brewing is complete
             if brewing and (time.time() - brew_start_time) >= 10:
@@ -483,8 +507,22 @@ def main():
                 coffee_type = 'None'
                 print("Brewing complete, turning off coffee machine.")
                 # Update server when brewing is complete
-                update_device_state_via_websocket('coffeeMachine', status)
+                #update_device_state_via_websocket('coffeeMachine', status) # update via websocket
+                send_device_update('coffeeMachine', None, new_state=False) #update with url
                 draw_devices()  # Update the display to show the coffee machine as 'off'
+
+            # Update micro oven time every second
+            if current_ticks - last_time_update > 1000:
+                update_microoven_time()
+                last_time_update = current_ticks
+            
+            
+                #Check micro oven timing is finished
+                if microoven_status == 'on' and microoven_time <= 0:
+                    microoven_status = 'off'
+                    print("Micro oven timing complete, turning off micro oven. send_device_update worked")
+                    send_device_update('microOven', None, new_state=False)  # Update server when timing is complete
+                    draw_devices() 
 
             # Control the media player based on user interaction or automatic processes
             control_media_player()
@@ -499,8 +537,9 @@ def main():
     except Exception as e:
         print(f"Unexpected error: {e}")
     finally:
-        pygame.quit()
+        #pygame.quit()
         sio.disconnect()
+        pygame.quit()
 
 
 if __name__ == '__main__':
